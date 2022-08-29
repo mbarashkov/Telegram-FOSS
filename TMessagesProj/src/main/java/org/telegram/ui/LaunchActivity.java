@@ -6635,7 +6635,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             }
         }
         try {
-            super.dispatchKeyEvent(event);
+            return super.dispatchKeyEvent(event);
         } catch (Exception e) {
             FileLog.e(e);
         }
