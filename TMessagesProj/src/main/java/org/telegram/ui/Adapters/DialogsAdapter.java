@@ -45,6 +45,7 @@ import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.ArchiveHintCell;
+import org.telegram.ui.Cells.BaseCell;
 import org.telegram.ui.Cells.DialogCell;
 import org.telegram.ui.Cells.DialogMeUrlCell;
 import org.telegram.ui.Cells.DialogsEmptyCell;
@@ -460,6 +461,9 @@ public class DialogsAdapter extends RecyclerListView.SelectionAdapter implements
                     DialogCell dialogCell = new DialogCell(parentFragment, mContext, true, false, currentAccount, null);
                     dialogCell.setArchivedPullAnimation(pullForegroundDrawable);
                     dialogCell.setPreloader(preloader);
+                    if(viewGroup instanceof BaseCell.BaseCellDelegate) {
+                        dialogCell.setDelegate((BaseCell.BaseCellDelegate) viewGroup);
+                    }
                     dialogCell.setDialogCellDelegate(this);
                     dialogCell.setIsTransitionSupport(isTransitionSupport);
                     view = dialogCell;
