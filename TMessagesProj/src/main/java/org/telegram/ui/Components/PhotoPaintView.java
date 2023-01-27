@@ -60,19 +60,13 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 
 @SuppressLint("NewApi")
-public class PhotoPaintView extends FrameLayout implements EntityView.EntityViewDelegate {
+public class PhotoPaintView extends FrameLayout implements IPhotoPaintView, EntityView.EntityViewDelegate {
 
     private Bitmap bitmapToEdit;
     private Bitmap facesBitmap;
     private UndoStore undoStore;
 
     int currentBrush;
-    private Brush[] brushes = new Brush[]{
-            new Brush.Radial(),
-            new Brush.Elliptical(),
-            new Brush.Neon(),
-            new Brush.Arrow()
-    };
 
     private FrameLayout toolsView;
     private TextView cancelTextView;
@@ -131,6 +125,8 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
     private MediaController.CropState currentCropState;
     private final Theme.ResourcesProvider resourcesProvider;
 
+    private float offsetTranslationY;
+
     public PhotoPaintView(Context context, Bitmap bitmap, Bitmap originalBitmap, int originalRotation, ArrayList<VideoEditedInfo.MediaEntity> entities, MediaController.CropState cropState, Runnable onInit, Theme.ResourcesProvider resourcesProvider) {
         super(context);
         this.resourcesProvider = resourcesProvider;
@@ -151,7 +147,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         curtainView.setVisibility(INVISIBLE);
         addView(curtainView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
-        renderView = new RenderView(context, new Painting(getPaintingSize()), bitmap);
+        renderView = new RenderView(context, new Painting(getPaintingSize(), originalBitmap, originalRotation), bitmap);
         renderView.setDelegate(new RenderView.RenderViewDelegate() {
 
             @Override
@@ -179,11 +175,16 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
                 }
                 return draw;
             }
+
+            @Override
+            public void resetBrush() {
+
+            }
         });
         renderView.setUndoStore(undoStore);
         renderView.setQueue(queue);
         renderView.setVisibility(View.INVISIBLE);
-        renderView.setBrush(brushes[0]);
+        renderView.setBrush(Brush.BRUSHES_LIST.get(0));
         addView(renderView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
 
         entitiesView = new EntitiesContainerView(context, new EntitiesContainerView.EntitiesContainerViewDelegate() {
@@ -368,10 +369,26 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         entitiesView.setVisibility(INVISIBLE);
     }
 
+    @Override
+    public void setOffsetTranslationY(float y, float progress, int keyboardHeight, boolean isPan) {
+        offsetTranslationY = y;
+        getColorPicker().setTranslationY(y);
+        getToolsView().setTranslationY(y);
+        getColorPickerBackground().setTranslationY(y);
+        getCurtainView().setTranslationY(y);
+    }
+
+    @Override
+    public float getOffsetTranslationY() {
+        return offsetTranslationY;
+    }
+
+    @Override
     public void onResume() {
         renderView.redraw();
     }
 
+    @Override
     public boolean onTouch(MotionEvent ev) {
         if (currentEntityView != null) {
             if (editingText) {
@@ -437,6 +454,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         colorPicker.setSettingsButtonImage(resource);
     }
 
+    @Override
     public void updateColors() {
         if (paintButton != null && paintButton.getColorFilter() != null) {
             paintButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_dialogFloatingButton), PorterDuff.Mode.MULTIPLY));
@@ -446,6 +464,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         }
     }
 
+    @Override
     public void init() {
         entitiesView.setVisibility(VISIBLE);
         renderView.setVisibility(View.VISIBLE);
@@ -454,6 +473,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         }
     }
 
+    @Override
     public void shutdown() {
         renderView.shutdown();
         entitiesView.setVisibility(GONE);
@@ -479,11 +499,13 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         return curtainView;
     }
 
-    public TextView getDoneTextView() {
+    @Override
+    public View getDoneView() {
         return doneTextView;
     }
 
-    public TextView getCancelTextView() {
+    @Override
+    public View getCancelView() {
         return cancelTextView;
     }
 
@@ -491,10 +513,12 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         return colorPicker;
     }
 
+    @Override
     public boolean hasChanges() {
         return undoStore.canUndo();
     }
 
+    @Override
     public Bitmap getBitmap(ArrayList<VideoEditedInfo.MediaEntity> entities, Bitmap[] thumbBitmap) {
         Bitmap bitmap = renderView.getResultBitmap();
         lcm = BigInteger.ONE;
@@ -515,7 +539,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
                     if (entity instanceof TextPaintView) {
                         mediaEntity.type = 1;
                         TextPaintView textPaintView = (TextPaintView) entity;
-                        mediaEntity.text = textPaintView.getText();
+                        mediaEntity.text = textPaintView.getText().toString();
                         int type = textPaintView.getType();
                         if (type == 0) {
                             mediaEntity.subType |= 1;
@@ -612,6 +636,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         return bitmap;
     }
 
+    @Override
     public long getLcm() {
         return lcm.longValue();
     }
@@ -904,6 +929,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         }
     }
 
+    @Override
     public ArrayList<TLRPC.InputDocument> getMasks() {
         ArrayList<TLRPC.InputDocument> result = null;
         int count = entitiesView.getChildCount();
@@ -927,6 +953,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         return result;
     }
 
+    @Override
     public void setTransform(float scale, float trX, float trY, float imageWidth, float imageHeight) {
         transformX = trX;
         transformY = trY;
@@ -991,6 +1018,11 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         invalidate();
     }
 
+    @Override
+    public void setOnDoneButtonClickedListener(Runnable callback) {
+        doneTextView.setOnClickListener(v -> callback.run());
+    }
+
     private boolean selectEntity(EntityView entityView) {
         boolean changed = false;
 
@@ -1017,7 +1049,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
 
         if (currentEntityView != null) {
             currentEntityView.select(selectionContainerView);
-            entitiesView.bringViewToFront(currentEntityView);
+            entitiesView.bringChildToFront(currentEntityView);
 
             if (currentEntityView instanceof TextPaintView) {
                 setCurrentSwatch(((TextPaintView) currentEntityView).getSwatch(), true);
@@ -1162,7 +1194,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
         curtainView.setVisibility(View.VISIBLE);
 
         final TextPaintView textPaintView = (TextPaintView) currentEntityView;
-        initialText = textPaintView.getText();
+        initialText = textPaintView.getText().toString();
         editingText = true;
 
         editedTextPosition = textPaintView.getPosition();
@@ -1205,7 +1237,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
             textPaintView.setText(initialText);
         }
 
-        if (textPaintView.getText().trim().length() == 0) {
+        if (textPaintView.getText().toString().trim().length() == 0) {
             entitiesView.removeView(textPaintView);
             selectEntity(null);
         } else {
@@ -1227,7 +1259,7 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
     }
 
     private void setBrush(int brush) {
-        renderView.setBrush(brushes[currentBrush = brush]);
+        renderView.setBrush(Brush.BRUSHES_LIST.get(currentBrush = brush));
     }
 
     private void setType(int type) {
@@ -1332,6 +1364,21 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
             params.height = LayoutHelper.WRAP_CONTENT;
             parent.setLayoutParams(params);
         }, this, Gravity.LEFT | Gravity.TOP, x, y);
+    }
+
+    @Override
+    public float adjustPanLayoutHelperProgress() {
+        return 0;
+    }
+
+    @Override
+    public int getEmojiPadding(boolean panned) {
+        return 0;
+    }
+
+    @Override
+    public RenderView getRenderView() {
+        return renderView;
     }
 
     private LinearLayout buttonForBrush(final int brush, int icon, String text, boolean selected) {
@@ -1696,4 +1743,10 @@ public class PhotoPaintView extends FrameLayout implements EntityView.EntityView
             this.angle = angle;
         }
     }
+
+    @Override
+    public void onBackPressed() {}
+
+    @Override
+    public void updateZoom(boolean zoomedOut) {}
 }
